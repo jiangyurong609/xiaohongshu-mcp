@@ -280,6 +280,36 @@ func healthHandler(c *gin.Context) {
 	}, "服务正常")
 }
 
+// uploadVideoHandler 上传视频文件
+func (s *AppServer) uploadVideoHandler(c *gin.Context) {
+	// 获取上传的文件
+	file, header, err := c.Request.FormFile("video")
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST",
+			"获取上传文件失败", err.Error())
+		return
+	}
+	defer file.Close()
+
+	// 验证文件大小（最大500MB）
+	const maxSize = 500 * 1024 * 1024
+	if header.Size > maxSize {
+		respondError(c, http.StatusBadRequest, "FILE_TOO_LARGE",
+			"视频文件过大", "最大支持500MB")
+		return
+	}
+
+	// 保存视频文件
+	result, err := s.xiaohongshuService.SaveUploadedVideo(file, header.Filename)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "UPLOAD_FAILED",
+			"保存视频失败", err.Error())
+		return
+	}
+
+	respondSuccess(c, result, "视频上传成功")
+}
+
 // myProfileHandler 我的信息
 func (s *AppServer) myProfileHandler(c *gin.Context) {
 	// 获取当前登录用户信息

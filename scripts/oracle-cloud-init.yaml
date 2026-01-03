@@ -1,0 +1,50 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - jq
+  - fonts-liberation
+  - libasound2
+  - libatk-bridge2.0-0
+  - libatk1.0-0
+  - libatspi2.0-0
+  - libcups2
+  - libdbus-1-3
+  - libdrm2
+  - libgbm1
+  - libgtk-3-0
+  - libnspr4
+  - libnss3
+  - libxcomposite1
+  - libxdamage1
+  - libxfixes3
+  - libxkbcommon0
+  - libxrandr2
+  - xdg-utils
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Create data directory
+  - mkdir -p /home/ubuntu/.xiaohongshu-mcp
+  - chown -R ubuntu:ubuntu /home/ubuntu/.xiaohongshu-mcp
+
+  # Pull and run xiaohongshu-mcp
+  - docker pull ghcr.io/xingyezhiqiu/xiaohongshu-mcp:latest
+  - docker run -d --name xiaohongshu-mcp --restart unless-stopped -p 18060:18060 -v /home/ubuntu/.xiaohongshu-mcp:/root/.xiaohongshu-mcp ghcr.io/xingyezhiqiu/xiaohongshu-mcp:latest
+
+  # Open firewall port (iptables)
+  - iptables -I INPUT -p tcp --dport 18060 -j ACCEPT
+  - netfilter-persistent save || true
+
+final_message: "xiaohongshu-mcp deployment complete. Service running on port 18060."

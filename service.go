@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -226,19 +227,21 @@ func (s *XiaohongshuService) publishContent(ctx context.Context, content xiaohon
 	return action.Publish(ctx, content)
 }
 
-// PublishVideo 发布视频（本地文件）
+// PublishVideo 发布视频（支持URL或本地文件）
 func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideoRequest) (*PublishVideoResponse, error) {
 	// 标题长度校验
 	if titleWidth := runewidth.StringWidth(req.Title); titleWidth > 40 {
 		return nil, fmt.Errorf("标题长度超过限制")
 	}
 
-	// 本地视频文件校验
 	if req.Video == "" {
-		return nil, fmt.Errorf("必须提供本地视频文件")
+		return nil, fmt.Errorf("必须提供视频文件")
 	}
-	if _, err := os.Stat(req.Video); err != nil {
-		return nil, fmt.Errorf("视频文件不存在或不可访问: %v", err)
+
+	// 处理视频：支持URL下载或本地路径
+	videoPath, err := s.processVideo(req.Video)
+	if err != nil {
+		return nil, err
 	}
 
 	// 构建发布内容
@@ -246,7 +249,7 @@ func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideo
 		Title:     req.Title,
 		Content:   req.Content,
 		Tags:      req.Tags,
-		VideoPath: req.Video,
+		VideoPath: videoPath,
 	}
 
 	// 执行发布
@@ -257,10 +260,45 @@ func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideo
 	resp := &PublishVideoResponse{
 		Title:   req.Title,
 		Content: req.Content,
-		Video:   req.Video,
+		Video:   videoPath,
 		Status:  "发布完成",
 	}
 	return resp, nil
+}
+
+// processVideo 处理视频，支持URL下载或本地路径
+func (s *XiaohongshuService) processVideo(video string) (string, error) {
+	processor := downloader.NewVideoProcessor()
+	return processor.ProcessVideo(video)
+}
+
+// UploadVideoResponse 视频上传响应
+type UploadVideoResponse struct {
+	LocalPath string `json:"local_path"`
+	Filename  string `json:"filename"`
+	Size      int64  `json:"size"`
+}
+
+// SaveUploadedVideo 保存上传的视频文件，返回本地路径
+func (s *XiaohongshuService) SaveUploadedVideo(reader io.Reader, filename string) (*UploadVideoResponse, error) {
+	processor := downloader.NewVideoProcessor()
+	localPath, err := processor.SaveUploadedVideo(reader, filename)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取文件大小
+	info, err := os.Stat(localPath)
+	var size int64
+	if err == nil {
+		size = info.Size()
+	}
+
+	return &UploadVideoResponse{
+		LocalPath: localPath,
+		Filename:  filename,
+		Size:      size,
+	}, nil
 }
 
 // publishVideo 执行视频发布
